@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# PyInstaller 打包产物
+build/
+dist/
+release/
+
+# 运行时配置（含 Token，严禁提交）
+config/config.json
+config/config.json.bak
+config/.write_test
+config/chrome_profile/
+
+# 大文件 / 压缩包
+*.zip
+
+# 数据文件（本地测试数据不入库）
+*.xlsx
+*.xls
+*.csv
+
+# 日志与临时文件
+*.log
+_smoke_test.py
+Thumbs.db
+.DS_Store
