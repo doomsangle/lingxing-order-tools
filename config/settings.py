@@ -99,7 +99,7 @@ class AppSettings:
     api_update_path: str = "/orders/status"
 
     # ========== 运行参数 ==========
-    request_timeout_sec: float = 15.0
+    request_timeout_sec: float = 30.0
     batch_delay_sec: float = 0.5
 
     # ========== 最近使用 ==========
