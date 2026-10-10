@@ -260,12 +260,13 @@ class OrderProcessWorker(QObject):
             reasons.append(f"ASIN不匹配(Excel:{ex_row.asin} / 领星:{lo.asin})")
 
         # 3. 金额匹配（四舍五入2位小数）
+        #    Excel/API 金额 ≤ ERP 金额 → 正常；> ERP 金额 → 异常
         if ex_row.amount > 0 and lo.order_total_amount > 0:
             ea = round(ex_row.amount, 2)
             la = round(lo.order_total_amount, 2)
-            if abs(ea - la) >= 0.01:
+            if ea > la:
                 result.amount_mismatch += 1
-                reasons.append(f"金额不匹配(Excel:{ea} / 领星:{la})")
+                reasons.append(f"金额异常(Excel:{ea} > 领星:{la})")
 
         # 汇总
         if reasons:
