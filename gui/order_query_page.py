@@ -254,9 +254,18 @@ class OrderQueryPage(QWidget):
         self._thread = QueryThread(settings, ids, status_filter)
         self._thread.done.connect(self._on_done)
         self._thread.error.connect(self._on_error)
-        self._thread.finished.connect(lambda: setattr(self, "_thread", None))
-        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.finished.connect(self._reap_query_thread)
         self._thread.start()
+
+    def _reap_query_thread(self) -> None:
+        """线程结束后等待其完全终止再释放引用，避免销毁竞态崩溃。"""
+        t = self._thread
+        if t is not None:
+            try:
+                t.wait(5000)
+            except RuntimeError:
+                pass
+        self._thread = None
 
     def _on_done(self, found: dict, not_found: list) -> None:
         self.query_btn.setEnabled(True)

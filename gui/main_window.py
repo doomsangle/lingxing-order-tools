@@ -492,7 +492,9 @@ class BatchMatchPage(QWidget):
                           asin_mismatch=0, amount_mismatch=0, errors=0,
                           api_updated=0, api_failed=0)
 
-        thread, worker = start_worker(self._order_rows, settings)
+        self._reap_thread()   # 上一次的线程若还在收尾，先等它退出
+        thread, worker = start_worker(
+            self._order_rows, settings, excel_path=self.file_edit.text().strip())
         self._thread = thread; self._worker = worker
         worker.log.connect(self._append_log)
         worker.progress.connect(self._on_progress)
@@ -524,6 +526,7 @@ class BatchMatchPage(QWidget):
         self._append_log(f"[{idx:>5}] {tag} {order_id} → {status} {api_tag}")
 
     def _on_finished(self, result: WorkerResult) -> None:
+        self._reap_thread()   # 等线程彻底退出再清理引用，避免销毁竞态崩溃
         self._append_log("========== 全部处理完成 ==========")
         self._update_stat(total=result.total, all_match=result.all_match,
                           not_found=result.not_found, asin_mismatch=result.asin_mismatch,
@@ -532,7 +535,11 @@ class BatchMatchPage(QWidget):
         if result.mismatch_excel_path:
             self._append_log(f"[输出] 不匹配 Excel: {result.mismatch_excel_path}")
         self._reset_buttons()
-        self._thread = None; self._worker = None
+        extra = ""
+        if result.mismatch_excel_path:
+            extra = f"\n\n📄 不匹配Excel已保存:\n{result.mismatch_excel_path}"
+        elif result.mismatch_failed:
+            extra = "\n\n⚠ 不匹配Excel生成失败，请查看日志"
         QMessageBox.information(
             self, "完成",
             f"处理完毕 ✅\n\n总计: {result.total}\n"
@@ -542,13 +549,26 @@ class BatchMatchPage(QWidget):
             f"  ⚠ 金额不匹配: {result.amount_mismatch}\n"
             f"  ⚠ 查询错误: {result.errors}\n"
             f"  📡 API回写成功: {result.api_updated}\n"
-            f"  📡 API回写失败: {result.api_failed}\n"
-            + (f"\n  📄 不匹配Excel: {result.mismatch_excel_path}" if result.mismatch_excel_path else ""))
+            f"  📡 API回写失败: {result.api_failed}"
+            + extra)
 
     def _on_failed(self, err: str) -> None:
         self._append_log(f"[致命错误] {err}")
-        self._reset_buttons(); self._thread = None; self._worker = None
+        self._reap_thread()
+        self._reset_buttons()
         QMessageBox.critical(self, "执行失败", err)
+
+    def _reap_thread(self) -> None:
+        """等待工作线程完全退出后释放引用（顺序确定，无销毁竞态）。"""
+        if self._thread is not None:
+            try:
+                if self._thread.isRunning():
+                    self._thread.quit()
+                self._thread.wait(5000)
+            except RuntimeError:
+                pass  # C++ 对象已被销毁（理论上不会再发生）
+        self._thread = None
+        self._worker = None
 
     def _reset_buttons(self) -> None:
         self.start_btn.setEnabled(True)
@@ -571,8 +591,7 @@ class BatchMatchPage(QWidget):
     def shutdown(self) -> None:
         if self._worker is not None:
             self._worker.request_stop()
-        if self._thread is not None and self._thread.isRunning():
-            self._thread.quit(); self._thread.wait(3000)
+        self._reap_thread()
 
 
 # ======================================================================

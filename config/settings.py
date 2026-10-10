@@ -114,7 +114,11 @@ class AppSettings:
             try:
                 raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
                 known = {k: raw[k] for k in cls.__dataclass_fields__ if k in raw}
-                return cls(**known)
+                s = cls(**known)
+                # 旧版本默认批量 20，残留配置会覆盖新默认值 → 迁移到 100
+                if raw.get("lingxing_batch_size") == 20:
+                    s.lingxing_batch_size = 100
+                return s
             except (json.JSONDecodeError, TypeError):
                 backup = CONFIG_PATH.with_suffix(".json.bak")
                 CONFIG_PATH.rename(backup)

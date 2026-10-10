@@ -39,6 +39,7 @@ class WorkerResult:
     api_failed: int = 0
     errors: int = 0
     mismatch_excel_path: str = ""
+    mismatch_failed: bool = False   # 不匹配 Excel 写入失败
 
 
 class OrderProcessWorker(QObject):
@@ -48,10 +49,16 @@ class OrderProcessWorker(QObject):
     finished_ok = pyqtSignal(object)
     failed = pyqtSignal(str)
 
-    def __init__(self, orders: list[ExcelOrderRow], settings: AppSettings) -> None:
+    def __init__(
+        self,
+        orders: list[ExcelOrderRow],
+        settings: AppSettings,
+        excel_path: str = "",
+    ) -> None:
         super().__init__()
         self._orders = orders
         self._settings = settings
+        self._excel_path = excel_path   # 当前处理的 Excel 实际路径（用于输出不匹配文件）
         self._wants_stop = False
         self._mismatches: list[tuple[ExcelOrderRow, str]] = []
 
@@ -70,6 +77,10 @@ class OrderProcessWorker(QObject):
                 self.failed.emit(f"未知模式: {mode}")
         except Exception as exc:
             self.failed.emit(f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}")
+        finally:
+            # 在自己线程的事件循环里排队销毁（此时 quit 还未投递，顺序确定），
+            # 避免跨线程 delete 引发 "QThread: Destroyed while thread is still running" 崩溃
+            self.deleteLater()
 
     # ==================================================================
     # API 模式
@@ -297,11 +308,11 @@ class OrderProcessWorker(QObject):
         return c
 
     def _write_mismatches(self, result: WorkerResult) -> None:
-        """把不匹配行写入 Excel。"""
+        """把不匹配行写入 Excel（源文件不可读时自动降级：无表头 / 换输出目录）。"""
         if not self._mismatches:
             self._log("[输出] 全部匹配，无需写 Excel")
             return
-        source = self._settings.last_excel_path
+        source = self._excel_path or self._settings.last_excel_path
         out = self._settings.output_excel_path or None
         try:
             path = write_mismatch_excel(source, self._mismatches, out)
@@ -309,19 +320,36 @@ class OrderProcessWorker(QObject):
             self._log(f"[输出] 不匹配 {len(self._mismatches)} 条已写入: {path}")
         except Exception as exc:
             self._log(f"[输出] 写 Excel 失败: {exc}")
+            # 兜底：改存到配置目录（exe 同级 config），保证文件一定生成
+            try:
+                from datetime import datetime
+                from config.settings import _config_dir
+                fallback = Path(_config_dir()) / (
+                    f"不匹配订单_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
+                path = write_mismatch_excel(source, self._mismatches, fallback)
+                result.mismatch_excel_path = path
+                self._log(f"[输出] 已改存到: {path}")
+            except Exception as exc2:
+                result.mismatch_failed = True
+                self._log(f"[输出] 兜底写入也失败: {exc2}（不匹配 {len(self._mismatches)} 条）")
 
     def _log(self, msg: str) -> None:
         self.log.emit(msg)
 
 
-def start_worker(orders: list[ExcelOrderRow], settings: AppSettings) -> tuple[QThread, OrderProcessWorker]:
+def start_worker(
+    orders: list[ExcelOrderRow],
+    settings: AppSettings,
+    excel_path: str = "",
+) -> tuple[QThread, OrderProcessWorker]:
+    """
+    创建工作线程。注意：不做任何 deleteLater —— 线程退出后由 GUI 侧 wait()
+    再释放引用，避免 "QThread: Destroyed while thread is still running" 崩溃。
+    """
     thread = QThread()
-    worker = OrderProcessWorker(orders, settings)
+    worker = OrderProcessWorker(orders, settings, excel_path=excel_path)
     worker.moveToThread(thread)
     thread.started.connect(worker.run)
     worker.finished_ok.connect(thread.quit)
     worker.failed.connect(thread.quit)
-    worker.finished_ok.connect(worker.deleteLater)
-    worker.failed.connect(worker.deleteLater)
-    thread.finished.connect(thread.deleteLater)
     return thread, worker
