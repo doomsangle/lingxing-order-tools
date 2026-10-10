@@ -149,9 +149,14 @@ class OrderQueryPage(QWidget):
 
     # ------------------------------------------------------------------
     def _do_query(self) -> None:
-        if self._thread is not None and self._thread.isRunning():
-            QMessageBox.information(self, "提示", "查询进行中，请稍候。")
-            return
+        if self._thread is not None:
+            try:
+                if self._thread.isRunning():
+                    QMessageBox.information(self, "提示", "查询进行中，请稍候。")
+                    return
+            except RuntimeError:
+                # C++ 对象已被 deleteLater 销毁，Python 引用还在 → 清理掉重建
+                self._thread = None
 
         settings: AppSettings = get_settings()
         if not settings.lingxing_auth_token:
@@ -172,6 +177,7 @@ class OrderQueryPage(QWidget):
         self._thread = QueryThread(settings, ids, status_filter)
         self._thread.done.connect(self._on_done)
         self._thread.error.connect(self._on_error)
+        self._thread.finished.connect(lambda: setattr(self, "_thread", None))
         self._thread.finished.connect(self._thread.deleteLater)
         self._thread.start()
 
