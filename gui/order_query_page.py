@@ -7,13 +7,16 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QEvent, Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from PyQt5.QtWidgets import (
     QComboBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
+    QListView,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -40,6 +43,83 @@ ORDER_STATUS_CHOICES = [
     "InvoiceUnconfirmed",
     "Unfulfillable",
 ]
+
+
+class MultiSelectComboBox(QComboBox):
+    """可多选的状态下拉框：勾选多个状态，查询时用英文逗号拼接传给 API。"""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._updating = False
+
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.lineEdit().setStyleSheet("background:transparent;border:none;")
+        self.setModel(QStandardItemModel(self))
+        self.setView(QListView(self))
+        self.view().setSelectionMode(self.view().NoSelection)
+
+        # 第 0 项：全部（与其他状态互斥）
+        self._all_item = QStandardItem("全部（不过滤）")
+        self._all_item.setCheckable(True)
+        self._all_item.setCheckState(Qt.Checked)
+        self.model().appendRow(self._all_item)
+
+        self._status_items: list[QStandardItem] = []
+        for st in ORDER_STATUS_CHOICES:
+            it = QStandardItem(st)
+            it.setCheckable(True)
+            it.setCheckState(Qt.Unchecked)
+            self.model().appendRow(it)
+            self._status_items.append(it)
+
+        self.model().itemChanged.connect(self._on_item_changed)
+        self.view().viewport().installEventFilter(self)
+        self._sync_text()
+
+    # ------------------------------------------------------------------
+    def eventFilter(self, obj, event):
+        # 吞掉弹层上的鼠标点击：手动切换勾选，且弹层不关闭
+        if obj is self.view().viewport() and event.type() == QEvent.MouseButtonRelease:
+            idx = self.view().indexAt(event.pos())
+            item = self.model().itemFromIndex(idx)
+            if item is not None and item.isEnabled():
+                item.setCheckState(
+                    Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
+                )
+            return True
+        return super().eventFilter(obj, event)
+
+    def _on_item_changed(self, item: QStandardItem) -> None:
+        if self._updating:
+            return
+        self._updating = True
+        try:
+            if item is self._all_item:
+                if item.checkState() == Qt.Checked:
+                    for it in self._status_items:
+                        it.setCheckState(Qt.Unchecked)
+                elif all(it.checkState() == Qt.Unchecked for it in self._status_items):
+                    item.setCheckState(Qt.Checked)  # 全部取消时保持"全部"勾选
+            else:
+                if item.checkState() == Qt.Checked:
+                    self._all_item.setCheckState(Qt.Unchecked)
+                elif all(it.checkState() == Qt.Unchecked for it in self._status_items):
+                    self._all_item.setCheckState(Qt.Checked)
+            self._sync_text()
+        finally:
+            self._updating = False
+
+    def _sync_text(self) -> None:
+        checked = self._checked()
+        self.lineEdit().setText(", ".join(checked) if checked else "全部（不过滤）")
+
+    def _checked(self) -> list[str]:
+        return [it.text() for it in self._status_items if it.checkState() == Qt.Checked]
+
+    def status_value(self) -> str:
+        """返回 API 的 orderStatus 参数，如 'Canceled,Pending'；全部=空串。"""
+        return ",".join(self._checked())
 
 
 def _split_order_ids(text: str) -> list[str]:
@@ -105,12 +185,9 @@ class OrderQueryPage(QWidget):
         self.count_label = QLabel("已输入 0 / 200 条")
         input_row.addWidget(self.count_label)
         input_row.addSpacing(20)
-        input_row.addWidget(QLabel("订单状态筛选:"))
-        self.status_combo = QComboBox()
-        self.status_combo.addItem("全部（不过滤）", "")
-        for st in ORDER_STATUS_CHOICES:
-            self.status_combo.addItem(st, st)
-        self.status_combo.setFixedWidth(220)
+        input_row.addWidget(QLabel("订单状态筛选（可多选）:"))
+        self.status_combo = MultiSelectComboBox()
+        self.status_combo.setFixedWidth(240)
         input_row.addWidget(self.status_combo)
         self.query_btn = QPushButton("🔍 查询")
         self.query_btn.setStyleSheet("background:#2e8b57;color:white;font-weight:bold;padding:6px 24px")
@@ -168,7 +245,7 @@ class OrderQueryPage(QWidget):
             QMessageBox.warning(self, "提示", "请先输入订单ID。")
             return
 
-        status_filter = self.status_combo.currentData() or ""
+        status_filter = self.status_combo.status_value()
         self.table.setRowCount(0)
         self.stat_label.setText("查询中 ...")
         self.query_btn.setEnabled(False)
