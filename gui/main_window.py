@@ -48,7 +48,7 @@ from gui.worker import OrderProcessWorker, WorkerResult, start_worker
 
 PRE_RUN_WARNING_API = (
     "⚠️ 运行前请确认：\n\n"
-    "1) amzrover 包装接口服务可用；\n"
+    "1) amzvideohelper 包装接口服务可用；\n"
     "2) 已选择含'订单号'列的 Excel 文件；\n"
     "3) 若配置了状态回写 API，请确认 API 服务可达。"
 )
@@ -75,31 +75,26 @@ class ConfigPage(QWidget):
     def _build(self) -> None:
         root = QVBoxLayout(self)
 
-        # ====== API 模式配置（amzrover 包装接口，零 Token）======
-        self.api_box = QGroupBox("API 模式（通过 amzrover 包装接口查询，服务端持有 Token，客户端零配置）")
+        # ====== API 模式配置（amzvideohelper 包装接口，零 Token）======
+        self.api_box = QGroupBox("API 模式（通过 amzvideohelper 包装接口查询，服务端持有 Token，客户端零配置）")
         api_fmt = QFormLayout(self.api_box)
         api_fmt.setContentsMargins(8, 20, 8, 8)
 
         api_info = QLabel(
-            "✅ 领星 ERP Token 已由 amzrover 服务端统一管理\n"
-            "   Token 过期后只需服务端更新，所有客户端自动生效\n"
+            "✅ 领星 ERP Token 已由 amzvideohelper 服务端统一管理\n"
+            "   Token 过期后只需服务端更新，所有客户端自动生效\n\n"
+            "内置接口地址（无需修改）：\n"
+            "  订单查询  https://amzvideohelper.top/api/erp/lingxing/order/list\n"
+            "  连通测试  https://amzvideohelper.top/api/erp/lingxing/test\n"
         )
         api_info.setStyleSheet("color:#2e8b57;font-size:12px;font-weight:bold;")
         api_info.setWordWrap(True)
         api_fmt.addRow(api_info)
 
-        self.api_order_url_edit = QLineEdit()
-        self.api_order_url_edit.setPlaceholderText("默认 http://amzrover.cn/admin/erp/lingxing/order/list")
-        api_fmt.addRow("订单查询接口:", self.api_order_url_edit)
-
-        self.api_test_url_edit = QLineEdit()
-        self.api_test_url_edit.setPlaceholderText("默认 http://amzrover.cn/admin/erp/lingxing/test")
-        api_fmt.addRow("连通性测试接口:", self.api_test_url_edit)
-
         self.api_batch_edit = QSpinBox(); self.api_batch_edit.setRange(1, 200)
         api_fmt.addRow("每批查询数量:", self.api_batch_edit)
 
-        self.api_test_btn = QPushButton("🔗 测试 amzrover 接口连通性")
+        self.api_test_btn = QPushButton("🔗 测试 amzvideohelper 接口连通性")
         self.api_test_btn.clicked.connect(self._test_lingxing)
         api_fmt.addRow("", self.api_test_btn)
 
@@ -194,8 +189,6 @@ class ConfigPage(QWidget):
     def _load(self) -> None:
         s = get_settings()
         self.mode_tabs.setCurrentIndex(0 if s.mode == "api" else 1)
-        self.api_order_url_edit.setText(s.lingxing_order_url)
-        self.api_test_url_edit.setText(s.lingxing_test_url)
         self.api_batch_edit.setValue(s.lingxing_batch_size)
         self.br_cdp_port.setValue(s.cdp_port)
         self.br_exe_edit.setText(s.chrome_executable)
@@ -209,8 +202,6 @@ class ConfigPage(QWidget):
     def _save(self) -> None:
         s = get_settings()
         s.mode = "api" if self.mode_tabs.currentIndex() == 0 else "browser"
-        s.lingxing_order_url = self.api_order_url_edit.text().strip() or "http://amzrover.cn/admin/erp/lingxing/order/list"
-        s.lingxing_test_url = self.api_test_url_edit.text().strip() or "http://amzrover.cn/admin/erp/lingxing/test"
         s.lingxing_batch_size = self.api_batch_edit.value()
         s.cdp_port = self.br_cdp_port.value()
         s.chrome_executable = self.br_exe_edit.text().strip()
@@ -225,10 +216,7 @@ class ConfigPage(QWidget):
         QMessageBox.information(self, "保存", "配置已保存 ✓")
 
     def _test_lingxing(self) -> None:
-        s = AppSettings()
-        s.lingxing_order_url = self.api_order_url_edit.text().strip() or get_settings().lingxing_order_url
-        s.lingxing_test_url = self.api_test_url_edit.text().strip() or get_settings().lingxing_test_url
-        s.request_timeout_sec = 15.0
+        s = get_settings()
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             msg = LingxingApiClient(s).test_connection()

@@ -86,8 +86,8 @@ class AppSettings:
     lingxing_zid: str = ""                 # X-AK-Zid
     lingxing_version: str = "3.9.3.3.0.040"
     lingxing_batch_size: int = 100
-    lingxing_test_url: str = "http://amzrover.cn/admin/erp/lingxing/test"
-    lingxing_order_url: str = "http://amzrover.cn/admin/erp/lingxing/order/list"
+    lingxing_test_url: str = "https://amzvideohelper.top/api/erp/lingxing/test"
+    lingxing_order_url: str = "https://amzvideohelper.top/api/erp/lingxing/order/list"
 
     # ========== 模式 2：浏览器自动化 ==========
     cdp_port: int = 9222
@@ -123,15 +123,16 @@ class AppSettings:
                 # 旧请求超时 15 秒 → 迁移到 30 秒
                 if raw.get("request_timeout_sec") == 15.0:
                     s.request_timeout_sec = 30.0
-                # lingxing_order_url 之前被误写为浏览器页面 URL → 迁移到 amzrover 包装接口
+                # lingxing_order_url 之前被误写为浏览器页面 URL 或 amzrover → 迁移到 amzvideohelper
                 old = raw.get("lingxing_order_url", "")
-                if "erp/orderList" in old or old.startswith("https://erp.lingxing.com"):
-                    # 旧 config 里这个键存的是浏览器订单页 URL，迁移到新字段
-                    s.lingxing_order_page_url = old
+                if "erp/orderList" in old or old.startswith("https://erp.lingxing.com") or "amzrover" in old:
+                    if "erp/orderList" in old or old.startswith("https://erp.lingxing.com"):
+                        # 旧 config 里这个键存的是浏览器订单页 URL，迁移到新字段
+                        s.lingxing_order_page_url = old
                     s.lingxing_order_url = cls.lingxing_order_url
                 # lingxing_test_url 同理
                 old_test = raw.get("lingxing_test_url", "")
-                if old_test and "amzrover" not in old_test:
+                if old_test and ("amzrover" in old_test or "amzvideohelper" not in old_test):
                     s.lingxing_test_url = cls.lingxing_test_url
                 return s
             except (json.JSONDecodeError, TypeError):
