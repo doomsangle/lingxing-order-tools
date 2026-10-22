@@ -1,4 +1,4 @@
-"""
+﻿"""
 主窗口：左侧菜单 + 三页结构。
 
   1) 订单查询（首页）：输入订单ID（≤200）+ 状态筛选 → 查询 → 表格展示
@@ -296,7 +296,7 @@ class ConfigPage(QWidget):
         self.br_cdp_port.setValue(s.cdp_port)
         self.br_exe_edit.setText(s.chrome_executable)
         self.br_userdir_edit.setText(s.chrome_user_data_dir)
-        self.br_url_edit.setText(s.lingxing_order_url)
+        self.br_url_edit.setText(s.lingxing_order_page_url)
         self.api_base_edit.setText(s.api_base_url)
         self.api_token_edit.setText(s.api_token)
         self.api_update_edit.setText(s.api_update_path)
@@ -316,7 +316,7 @@ class ConfigPage(QWidget):
         s.cdp_port = self.br_cdp_port.value()
         s.chrome_executable = self.br_exe_edit.text().strip()
         s.chrome_user_data_dir = self.br_userdir_edit.text().strip()
-        s.lingxing_order_url = self.br_url_edit.text().strip() or "https://erp.lingxing.com/erp/orderList"
+        s.lingxing_order_page_url = self.br_url_edit.text().strip() or "https://erp.lingxing.com/erp/orderList"
         s.api_base_url = self.api_base_edit.text().strip()
         s.api_token = self.api_token_edit.text()
         s.api_update_path = self.api_update_edit.text().strip() or "/orders/status"

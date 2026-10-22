@@ -167,7 +167,7 @@ class LingxingApiClient:
         self, order_ids: Iterable[str], order_status: str = "",
     ) -> dict[str, LingxingOrder]:
         """
-        批量查询订单，返回完整订单数据。
+        批量查询订单（调用 amzrover 包装接口，服务端持有 Token，客户端零配置）。
 
         :param order_ids: 订单号列表（不超过 200 个）
         :param order_status: 可选状态筛选，如 "Canceled,Pending"；空=不过滤
@@ -178,39 +178,45 @@ class LingxingApiClient:
         if not ids:
             return {}
 
-        headers = self._build_headers()
         body = self._build_body(ids, order_status)
+        url = self.settings.lingxing_order_url or "http://amzrover.cn/admin/erp/lingxing/order/list"
 
         try:
             resp = requests.post(
-                self.settings.lingxing_api_url,
+                url,
                 json=body,
-                headers=headers,
                 timeout=self.settings.request_timeout_sec,
             )
             resp.raise_for_status()
-            data = resp.json()
+            wrapper = resp.json()
         except requests.RequestException as exc:
             raise LingxingApiError(f"查询失败: {exc}") from exc
         except ValueError as exc:
             raise LingxingApiError(f"返回非 JSON: {exc}") from exc
 
-        if not data.get("success"):
-            msg = data.get("msg", "未知错误")
-            raise LingxingApiError(f"查询失败: {msg}")
+        # 外层包装: {ok, code, msg, data: <领星原始响应>}
+        if not wrapper.get("ok"):
+            msg = wrapper.get("msg", "未知错误")
+            code = wrapper.get("code", "")
+            raise LingxingApiError(f"查询失败 code={code}: {msg}")
+
+        # 内层领星原始响应: {code:1, data:{data:[{...}]}, success:true}
+        inner = wrapper.get("data") or {}
+        if isinstance(inner, dict) and inner.get("success") is False:
+            msg = inner.get("msg", "未知错误")
+            raise LingxingApiError(f"领星返回失败: {msg}")
 
         result: dict[str, LingxingOrder] = {}
-        items = (data.get("data") or {}).get("data") or []
+        inner_data = (inner.get("data") if isinstance(inner, dict) else None) or {}
+        items = inner_data.get("data") or []
         for item in items:
             oid = (item.get("amazonOrderId") or "").strip()
             if not oid:
                 continue
-            # 取第一个 SKU 的 ASIN
             slist = item.get("slist") or []
             asin = ""
             if slist and isinstance(slist, list):
                 asin = (slist[0].get("asin") or "").strip()
-            # 金额
             try:
                 amt = float(item.get("orderTotalAmount") or 0)
             except (ValueError, TypeError):

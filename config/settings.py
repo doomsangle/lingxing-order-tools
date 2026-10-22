@@ -87,12 +87,13 @@ class AppSettings:
     lingxing_version: str = "3.9.3.3.0.040"
     lingxing_batch_size: int = 100
     lingxing_test_url: str = "http://amzrover.cn/admin/erp/lingxing/test"
+    lingxing_order_url: str = "http://amzrover.cn/admin/erp/lingxing/order/list"
 
     # ========== 模式 2：浏览器自动化 ==========
     cdp_port: int = 9222
     chrome_executable: str = ""
     chrome_user_data_dir: str = ""         # 空则自动用 %APPDATA%\LingxingOrderTool\chrome_profile
-    lingxing_order_url: str = "https://erp.lingxing.com/erp/orderList"
+    lingxing_order_page_url: str = "https://erp.lingxing.com/erp/orderList"
 
     # ========== 用户订单状态回写 API（两种模式共用） ==========
     api_base_url: str = ""
@@ -119,6 +120,19 @@ class AppSettings:
                 # 旧版本默认批量 20，残留配置会覆盖新默认值 → 迁移到 100
                 if raw.get("lingxing_batch_size") == 20:
                     s.lingxing_batch_size = 100
+                # 旧请求超时 15 秒 → 迁移到 30 秒
+                if raw.get("request_timeout_sec") == 15.0:
+                    s.request_timeout_sec = 30.0
+                # lingxing_order_url 之前被误写为浏览器页面 URL → 迁移到 amzrover 包装接口
+                old = raw.get("lingxing_order_url", "")
+                if "erp/orderList" in old or old.startswith("https://erp.lingxing.com"):
+                    # 旧 config 里这个键存的是浏览器订单页 URL，迁移到新字段
+                    s.lingxing_order_page_url = old
+                    s.lingxing_order_url = cls.lingxing_order_url
+                # lingxing_test_url 同理
+                old_test = raw.get("lingxing_test_url", "")
+                if old_test and "amzrover" not in old_test:
+                    s.lingxing_test_url = cls.lingxing_test_url
                 return s
             except (json.JSONDecodeError, TypeError):
                 backup = CONFIG_PATH.with_suffix(".json.bak")

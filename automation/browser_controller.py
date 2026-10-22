@@ -1,4 +1,4 @@
-"""
+﻿"""
 Playwright CDP 浏览器控制器。
 
 设计目标：
@@ -93,7 +93,7 @@ class BrowserController:
     def connect(self) -> None:
         """
         连接 CDP，必要时自动启动 Chrome。连接成功后 page 指向
-        ``settings.lingxing_order_url`` 的页面（或自动导航过去）。
+        ``settings.lingxing_order_page_url`` 的页面（或自动导航过去）。
         """
         self._log("[连接] 正在初始化 Playwright ...")
         self._pw = sync_playwright().start()
@@ -111,9 +111,9 @@ class BrowserController:
 
         assert self._page is not None
         url = self._page.url or ""
-        if self.settings.lingxing_order_url not in url:
+        if self.settings.lingxing_order_page_url not in url:
             self._log(f"[连接] 当前页面 {url!r}，导航到订单列表页 ...")
-            self._page.goto(self.settings.lingxing_order_url, wait_until="domcontentloaded", timeout=30000)
+            self._page.goto(self.settings.lingxing_order_page_url, wait_until="domcontentloaded", timeout=30000)
 
         self._wait_page_stable()
         self._log(f"[连接] 当前页面: {self._page.url}")
@@ -175,9 +175,9 @@ class BrowserController:
     def ensure_on_order_page(self) -> None:
         """若当前不在订单列表页则自动跳转。"""
         assert self._page is not None
-        if self.settings.lingxing_order_url not in self._page.url:
+        if self.settings.lingxing_order_page_url not in self._page.url:
             self._log(f"[页面] 不在订单列表，当前 {self._page.url}，跳转 ...")
-            self._page.goto(self.settings.lingxing_order_url, wait_until="domcontentloaded", timeout=30000)
+            self._page.goto(self.settings.lingxing_order_page_url, wait_until="domcontentloaded", timeout=30000)
             self._wait_page_stable()
         # 简单登录态探测：如果出现登录相关元素，提醒用户
         if self._page.locator('input[type="password"]').count() > 0:
@@ -257,7 +257,7 @@ class BrowserController:
             f"--user-data-dir={user_data}",
             "--no-first-run",
             "--no-default-browser-check",
-            self.settings.lingxing_order_url,
+            self.settings.lingxing_order_page_url,
         ]
         self._log(f"[Chrome] 启动参数: {' '.join(args)}")
         try:
