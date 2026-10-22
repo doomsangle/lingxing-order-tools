@@ -1,4 +1,4 @@
-﻿"""
+"""
 主窗口：左侧菜单 + 三页结构。
 
   1) 订单查询（首页）：输入订单ID（≤200）+ 状态筛选 → 查询 → 表格展示
@@ -39,7 +39,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from api.lingxing_api_client import LingxingApiClient, LingxingApiError, parse_lingxing_headers
+from api.lingxing_api_client import LingxingApiClient, LingxingApiError
 from config.settings import AppSettings, get_settings, reload_settings
 from datasource.excel_reader import read_excel_orders, ExcelOrderRow
 from gui.order_query_page import OrderQueryPage
@@ -48,7 +48,7 @@ from gui.worker import OrderProcessWorker, WorkerResult, start_worker
 
 PRE_RUN_WARNING_API = (
     "⚠️ 运行前请确认：\n\n"
-    "1) 已在【配置】页填写有效的领星 ERP Token；\n"
+    "1) amzrover 包装接口服务可用；\n"
     "2) 已选择含'订单号'列的 Excel 文件；\n"
     "3) 若配置了状态回写 API，请确认 API 服务可达。"
 )
@@ -59,15 +59,6 @@ PRE_RUN_WARNING_BROWSER = (
     "2) Chrome 已打开 https://erp.lingxing.com/erp/orderList 订单列表页；\n"
     "3) 已选择含'订单号'列的 Excel 文件；\n"
     "4) 当前店铺已切换到你要处理的那个店铺。"
-)
-
-TOKEN_HELP = (
-    "auth-token 获取步骤：\n"
-    "  1. 打开领星 ERP → F12 → Network 标签\n"
-    "  2. 在订单列表页搜索任意订单\n"
-    "  3. 找到 OrderList 请求 → 复制 auth-token / X-AK-Company-Id / X-AK-Uid / X-AK-Zid\n"
-    "  4. 粘贴到对应输入框即可\n"
-    "Token 会过期，过期后重复以上步骤更新。"
 )
 
 
@@ -84,85 +75,33 @@ class ConfigPage(QWidget):
     def _build(self) -> None:
         root = QVBoxLayout(self)
 
-        # ====== 领星 ERP API 配置 ======
-        self.lx_box = QGroupBox("领星 ERP API 配置")
-        lx_outer = QVBoxLayout(self.lx_box)
+        # ====== API 模式配置（amzrover 包装接口，零 Token）======
+        self.api_box = QGroupBox("API 模式（通过 amzrover 包装接口查询，服务端持有 Token，客户端零配置）")
+        api_fmt = QFormLayout(self.api_box)
+        api_fmt.setContentsMargins(8, 20, 8, 8)
 
-        im_row = QHBoxLayout()
-        im_row.addWidget(QLabel("输入方式:"))
-        self.lx_input_mode = QComboBox()
-        self.lx_input_mode.addItem("⌨ 手动填写（逐项输入）", "manual")
-        self.lx_input_mode.addItem("📋 快速粘贴 Headers（自动解析，推荐）", "quick")
-        self.lx_input_mode.currentIndexChanged.connect(self._on_lx_input_mode_changed)
-        im_row.addWidget(self.lx_input_mode, 1)
-        lx_outer.addLayout(im_row)
-
-        # -- 方式 A：手动填写 --
-        self.lx_manual_widget = QWidget()
-        lx_layout = QFormLayout(self.lx_manual_widget)
-        lx_layout.setContentsMargins(0, 0, 0, 0)
-
-        help_label = QLabel(TOKEN_HELP)
-        help_label.setStyleSheet("color:#888;font-size:11px;white-space:pre-wrap;")
-        help_label.setWordWrap(True)
-        lx_layout.addRow(help_label)
-
-        self.lx_url_edit = QLineEdit()
-        self.lx_url_edit.setPlaceholderText("https://gw.lingxingerp.com/amz-order/api/order/OrderList")
-        lx_layout.addRow("API 地址:", self.lx_url_edit)
-
-        self.lx_token_edit = QLineEdit(); self.lx_token_edit.setEchoMode(QLineEdit.Password)
-        self.lx_token_show = QCheckBox("显示")
-        self.lx_token_show.toggled.connect(lambda c: self.lx_token_edit.setEchoMode(
-            QLineEdit.Normal if c else QLineEdit.Password))
-        token_row = QHBoxLayout(); token_row.addWidget(self.lx_token_edit, 1); token_row.addWidget(self.lx_token_show)
-        token_wrap = QWidget(); token_wrap.setLayout(token_row)
-        lx_layout.addRow("auth-token:", token_wrap)
-
-        self.lx_company_edit = QLineEdit()
-        self.lx_uid_edit = QLineEdit()
-        self.lx_zid_edit = QLineEdit()
-        self.lx_env_edit = QLineEdit()
-        self.lx_version_edit = QLineEdit()
-        self.lx_batch_edit = QSpinBox(); self.lx_batch_edit.setRange(1, 200)
-
-        lx_layout.addRow("X-AK-Company-Id:", self.lx_company_edit)
-        lx_layout.addRow("X-AK-Uid:", self.lx_uid_edit)
-        lx_layout.addRow("X-AK-Zid:", self.lx_zid_edit)
-        lx_layout.addRow("X-AK-ENV-KEY:", self.lx_env_edit)
-        lx_layout.addRow("X-AK-Version:", self.lx_version_edit)
-        lx_layout.addRow("每批查询数量:", self.lx_batch_edit)
-
-        self.lx_test_btn = QPushButton("🔗 测试领星 API 连接")
-        self.lx_test_btn.clicked.connect(self._test_lingxing)
-        lx_layout.addRow("", self.lx_test_btn)
-        lx_outer.addWidget(self.lx_manual_widget)
-
-        # -- 方式 B：快速粘贴 --
-        self.lx_quick_widget = QWidget()
-        qv = QVBoxLayout(self.lx_quick_widget)
-        qv.setContentsMargins(0, 0, 0, 0)
-        qv.addWidget(QLabel(
-            "把浏览器 F12 → Network → OrderList 请求的 Request Headers\n"
-            "（含 POST 请求行整段）原样粘贴到下面，点【解析并填充】："
-        ))
-        self.lx_paste_edit = QPlainTextEdit()
-        self.lx_paste_edit.setPlaceholderText(
-            "POST /amz-order/api/order/OrderList HTTP/1.1\n"
-            "Host: gw.lingxingerp.com\n"
-            "auth-token: 671aRdLAQgnHCfGx+...\n"
-            "X-AK-Company-Id: 90136227748491776\n"
-            "..."
+        api_info = QLabel(
+            "✅ 领星 ERP Token 已由 amzrover 服务端统一管理\n"
+            "   Token 过期后只需服务端更新，所有客户端自动生效\n"
         )
-        self.lx_paste_edit.setMaximumHeight(160)
-        qv.addWidget(self.lx_paste_edit)
-        parse_btn = QPushButton("📥 解析并填充")
-        parse_btn.setStyleSheet("font-weight:bold;padding:6px")
-        parse_btn.clicked.connect(self._parse_pasted_headers)
-        qv.addWidget(parse_btn)
-        self.lx_parse_result = QLabel("")
-        qv.addWidget(self.lx_parse_result)
-        lx_outer.addWidget(self.lx_quick_widget)
+        api_info.setStyleSheet("color:#2e8b57;font-size:12px;font-weight:bold;")
+        api_info.setWordWrap(True)
+        api_fmt.addRow(api_info)
+
+        self.api_order_url_edit = QLineEdit()
+        self.api_order_url_edit.setPlaceholderText("默认 http://amzrover.cn/admin/erp/lingxing/order/list")
+        api_fmt.addRow("订单查询接口:", self.api_order_url_edit)
+
+        self.api_test_url_edit = QLineEdit()
+        self.api_test_url_edit.setPlaceholderText("默认 http://amzrover.cn/admin/erp/lingxing/test")
+        api_fmt.addRow("连通性测试接口:", self.api_test_url_edit)
+
+        self.api_batch_edit = QSpinBox(); self.api_batch_edit.setRange(1, 200)
+        api_fmt.addRow("每批查询数量:", self.api_batch_edit)
+
+        self.api_test_btn = QPushButton("🔗 测试 amzrover 接口连通性")
+        self.api_test_btn.clicked.connect(self._test_lingxing)
+        api_fmt.addRow("", self.api_test_btn)
 
         # ====== 浏览器配置 ======
         self.br_box = QGroupBox("浏览器自动化配置")
@@ -193,12 +132,14 @@ class ConfigPage(QWidget):
         api_tab = QWidget()
         api_lay = QVBoxLayout(api_tab)
         api_lay.setContentsMargins(0, 4, 0, 0)
-        api_lay.addWidget(self.lx_box)
+        api_lay.addWidget(self.api_box)
+        api_lay.addStretch()
         browser_tab = QWidget()
         br_lay = QVBoxLayout(browser_tab)
         br_lay.setContentsMargins(0, 4, 0, 0)
         br_lay.addWidget(self.br_box)
-        self.mode_tabs.addTab(api_tab, "⚡ 直接 API（快、批量、需 Token）")
+        br_lay.addStretch()
+        self.mode_tabs.addTab(api_tab, "⚡ 直接 API（快、批量、无需 Token）")
         self.mode_tabs.addTab(browser_tab, "🌐 浏览器自动化（需先登录 Chrome）")
 
         # ====== 回写 API ======
@@ -233,7 +174,7 @@ class ConfigPage(QWidget):
         root.addWidget(self.mode_tabs)
         root.addWidget(api_box)
         root.addWidget(out_box)
-        root.addStretch()          # 弹性空间在内容之后，内容靠顶、保存按钮固定底部
+        root.addStretch()
         root.addLayout(save_row)
 
     # ------------------------------------------------------------------
@@ -249,50 +190,13 @@ class ConfigPage(QWidget):
         p, _ = QFileDialog.getSaveFileName(self, "选择输出路径", "", "Excel 文件 (*.xlsx)")
         if p: target.setText(p)
 
-    def _on_lx_input_mode_changed(self, idx: int) -> None:
-        is_quick = self.lx_input_mode.itemData(idx) == "quick"
-        self.lx_manual_widget.setVisible(not is_quick)
-        self.lx_quick_widget.setVisible(is_quick)
-
-    def _parse_pasted_headers(self) -> None:
-        text = self.lx_paste_edit.toPlainText()
-        if not text.strip():
-            QMessageBox.warning(self, "提示", "请先粘贴 Headers 内容。")
-            return
-        try:
-            p = parse_lingxing_headers(text)
-        except ValueError as exc:
-            self.lx_parse_result.setText(f"❌ 解析失败: {exc}")
-            self.lx_parse_result.setStyleSheet("color:#b22222;font-weight:bold;")
-            return
-
-        if p.get("api_url"):
-            self.lx_url_edit.setText(p["api_url"])
-        self.lx_token_edit.setText(p.get("auth_token", ""))
-        self.lx_company_edit.setText(p.get("company_id", ""))
-        self.lx_uid_edit.setText(p.get("uid", ""))
-        self.lx_zid_edit.setText(p.get("zid", ""))
-        if p.get("env_key"):
-            self.lx_env_edit.setText(p["env_key"])
-        if p.get("version"):
-            self.lx_version_edit.setText(p["version"])
-
-        self.lx_parse_result.setText("✅ 解析成功！已自动填充，请核对后点【保存配置】。")
-        self.lx_parse_result.setStyleSheet("color:#2e8b57;font-weight:bold;")
-        self.lx_input_mode.setCurrentIndex(0)
-
     # ------------------------------------------------------------------
     def _load(self) -> None:
         s = get_settings()
         self.mode_tabs.setCurrentIndex(0 if s.mode == "api" else 1)
-        self.lx_url_edit.setText(s.lingxing_api_url)
-        self.lx_token_edit.setText(s.lingxing_auth_token)
-        self.lx_company_edit.setText(s.lingxing_company_id)
-        self.lx_uid_edit.setText(s.lingxing_uid)
-        self.lx_zid_edit.setText(s.lingxing_zid)
-        self.lx_env_edit.setText(s.lingxing_env_key)
-        self.lx_version_edit.setText(s.lingxing_version)
-        self.lx_batch_edit.setValue(s.lingxing_batch_size)
+        self.api_order_url_edit.setText(s.lingxing_order_url)
+        self.api_test_url_edit.setText(s.lingxing_test_url)
+        self.api_batch_edit.setValue(s.lingxing_batch_size)
         self.br_cdp_port.setValue(s.cdp_port)
         self.br_exe_edit.setText(s.chrome_executable)
         self.br_userdir_edit.setText(s.chrome_user_data_dir)
@@ -305,14 +209,9 @@ class ConfigPage(QWidget):
     def _save(self) -> None:
         s = get_settings()
         s.mode = "api" if self.mode_tabs.currentIndex() == 0 else "browser"
-        s.lingxing_api_url = self.lx_url_edit.text().strip() or "https://gw.lingxingerp.com/amz-order/api/order/OrderList"
-        s.lingxing_auth_token = self.lx_token_edit.text().strip()
-        s.lingxing_company_id = self.lx_company_edit.text().strip()
-        s.lingxing_uid = self.lx_uid_edit.text().strip()
-        s.lingxing_zid = self.lx_zid_edit.text().strip()
-        s.lingxing_env_key = self.lx_env_edit.text().strip() or "SAAS-12"
-        s.lingxing_version = self.lx_version_edit.text().strip() or "3.9.3.3.0.040"
-        s.lingxing_batch_size = self.lx_batch_edit.value()
+        s.lingxing_order_url = self.api_order_url_edit.text().strip() or "http://amzrover.cn/admin/erp/lingxing/order/list"
+        s.lingxing_test_url = self.api_test_url_edit.text().strip() or "http://amzrover.cn/admin/erp/lingxing/test"
+        s.lingxing_batch_size = self.api_batch_edit.value()
         s.cdp_port = self.br_cdp_port.value()
         s.chrome_executable = self.br_exe_edit.text().strip()
         s.chrome_user_data_dir = self.br_userdir_edit.text().strip()
@@ -327,14 +226,9 @@ class ConfigPage(QWidget):
 
     def _test_lingxing(self) -> None:
         s = AppSettings()
-        s.lingxing_api_url = self.lx_url_edit.text().strip() or get_settings().lingxing_api_url
-        s.lingxing_auth_token = self.lx_token_edit.text().strip()
-        s.lingxing_company_id = self.lx_company_edit.text().strip()
-        s.lingxing_env_key = self.lx_env_edit.text().strip() or "SAAS-12"
-        s.lingxing_uid = self.lx_uid_edit.text().strip()
-        s.lingxing_zid = self.lx_zid_edit.text().strip()
-        s.lingxing_version = self.lx_version_edit.text().strip() or "3.9.3.3.0.040"
-        s.request_timeout_sec = 10.0
+        s.lingxing_order_url = self.api_order_url_edit.text().strip() or get_settings().lingxing_order_url
+        s.lingxing_test_url = self.api_test_url_edit.text().strip() or get_settings().lingxing_test_url
+        s.request_timeout_sec = 15.0
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             msg = LingxingApiClient(s).test_connection()
@@ -478,8 +372,6 @@ class BatchMatchPage(QWidget):
             QMessageBox.warning(self, "提示", "请先选择有效的 Excel 文件。"); return
 
         mode = settings.mode
-        if mode == "api" and not settings.lingxing_auth_token:
-            QMessageBox.warning(self, "提示", "未配置领星 ERP Token。请到【配置】页填写。"); return
         if mode == "browser" and not settings.chrome_executable_resolved():
             QMessageBox.warning(self, "提示", "未检测到 Chrome。请到【配置】页指定 chrome.exe 路径。"); return
 
