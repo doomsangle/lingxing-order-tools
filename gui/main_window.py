@@ -81,11 +81,12 @@ class ConfigPage(QWidget):
         api_fmt.setContentsMargins(8, 20, 8, 8)
 
         api_info = QLabel(
-            "✅ 领星 ERP Token 已由 amzvideohelper 服务端统一管理\n"
-            "   Token 过期后只需服务端更新，所有客户端自动生效\n\n"
+            "✅ 领星 ERP 凭证已由 amzvideohelper 服务端统一管理\n"
+            "   凭证过期后只需官网更新，所有客户端自动生效，无需重新分发\n\n"
             "内置接口地址（无需修改）：\n"
             "  订单查询  https://amzvideohelper.top/api/erp/lingxing/order/list\n"
-            "  连通测试  https://amzvideohelper.top/api/erp/lingxing/test\n"
+            "  连通测试  https://amzvideohelper.top/api/erp/lingxing/test\n\n"
+            "鉴权方式：Authorization: Bearer <API Key>（已内置）"
         )
         api_info.setStyleSheet("color:#2e8b57;font-size:12px;font-weight:bold;")
         api_info.setWordWrap(True)

@@ -1,16 +1,15 @@
 """
 领星 ERP 订单查询 API 客户端。
 
-直接 HTTP POST 调用领星 ERP 后端接口，无需浏览器自动化。
-用户需从浏览器 DevTools 抓取 auth-token 等请求头，填入配置即可。
-
-接口：POST https://gw.lingxingerp.com/amz-order/api/order/OrderList
-请求体：JSON，searchField="amazonOrderId"，searchValue=逗号分隔的订单号
-响应：{code:1, data:{data:[{amazonOrderId, orderStatus, ...}]}, success:true}
+通过 amzvideohelper 平台包装接口查询（服务端持有领星凭证，客户端只需 API Key）：
+  订单查询：POST https://amzvideohelper.top/api/erp/lingxing/order/list
+  连通测试：POST https://amzvideohelper.top/api/erp/lingxing/test
+鉴权：Authorization: Bearer <API Key>
+order/list 请求体完全照搬领星原始接口，响应原样透传：
+  {code:1, data:{data:[{amazonOrderId, orderStatus, ...}]}, success:true}
 """
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -95,25 +94,13 @@ class LingxingApiClient:
 
     # ------------------------------------------------------------------
     def _build_headers(self) -> dict:
-        """构建请求头（含用户配置的 auth-token 等）。"""
+        """构建 amzvideohelper 接口请求头（Bearer API Key 鉴权）。"""
         s = self.settings
-        if not s.lingxing_auth_token:
-            raise LingxingApiError("未配置领星 ERP auth-token，请在配置页面填写。")
+        if not s.lingxing_api_key:
+            raise LingxingApiError("未配置 amzvideohelper API Key。")
         return {
-            "Content-Type": "application/json;charset=UTF-8",
-            "Accept": "application/json, text/plain, */*",
-            "AK-Client-Type": "web",
-            "AK-Origin": "https://erp.lingxing.com",
-            "auth-token": s.lingxing_auth_token,
-            "X-AK-Company-Id": s.lingxing_company_id,
-            "X-AK-ENV-KEY": s.lingxing_env_key,
-            "X-AK-Language": "zh",
-            "X-AK-PLATFORM": "1",
-            "X-AK-Request-Source": "erp",
-            "X-AK-Request-Id": str(uuid.uuid4()),
-            "X-AK-Uid": s.lingxing_uid,
-            "X-AK-Version": s.lingxing_version,
-            "X-AK-Zid": s.lingxing_zid,
+            "Authorization": f"Bearer {s.lingxing_api_key}",
+            "Content-Type": "application/json",
         }
 
     def _build_body(self, order_ids: list[str], order_status: str = "") -> dict:
@@ -139,35 +126,36 @@ class LingxingApiClient:
     # ------------------------------------------------------------------
     def test_connection(self) -> str:
         """
-        测试领星 ERP 连通性（调用 amzrover 包装接口）。
+        测试 amzvideohelper 接口连通性（同时验证服务端领星凭证是否可用）。
         :returns: 成功消息
         :raises LingxingApiError: 失败原因
         """
-        url = self.settings.lingxing_test_url or "http://amzrover.cn/admin/erp/lingxing/test"
+        url = self.settings.lingxing_test_url
+        headers = self._build_headers()
         try:
             resp = requests.post(
                 url,
+                headers=headers,
                 timeout=self.settings.request_timeout_sec,
             )
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
-            raise LingxingApiError(f"网络请求失败: {exc}") from exc
+            raise LingxingApiError(self._explain_http_error(exc)) from exc
         except ValueError as exc:
             raise LingxingApiError(f"返回非 JSON: {exc}") from exc
 
         if data.get("ok"):
-            return f"连接成功 ✓  msg={data.get('msg', '')}"
-        msg = data.get("msg", "未知错误")
-        code = data.get("code", "")
-        raise LingxingApiError(f"连接失败 code={code}: {msg}")
+            return f"连接成功 ✓  {data.get('message') or data.get('msg', '')}"
+        msg = data.get("message") or data.get("msg") or "未知错误"
+        raise LingxingApiError(f"连接失败: {msg}")
 
     # ------------------------------------------------------------------
     def query_orders(
         self, order_ids: Iterable[str], order_status: str = "",
     ) -> dict[str, LingxingOrder]:
         """
-        批量查询订单（调用 amzrover 包装接口，服务端持有 Token，客户端零配置）。
+        批量查询订单（amzvideohelper 透传领星 order/list，服务端持有领星凭证）。
 
         :param order_ids: 订单号列表（不超过 200 个）
         :param order_status: 可选状态筛选，如 "Canceled,Pending"；空=不过滤
@@ -179,36 +167,37 @@ class LingxingApiClient:
             return {}
 
         body = self._build_body(ids, order_status)
-        url = self.settings.lingxing_order_url or "http://amzrover.cn/admin/erp/lingxing/order/list"
+        url = self.settings.lingxing_order_url
+        headers = self._build_headers()
 
         try:
             resp = requests.post(
                 url,
                 json=body,
+                headers=headers,
                 timeout=self.settings.request_timeout_sec,
             )
             resp.raise_for_status()
-            wrapper = resp.json()
+            data = resp.json()
         except requests.RequestException as exc:
-            raise LingxingApiError(f"查询失败: {exc}") from exc
+            raise LingxingApiError(self._explain_http_error(exc)) from exc
         except ValueError as exc:
             raise LingxingApiError(f"返回非 JSON: {exc}") from exc
 
-        # 外层包装: {ok, code, msg, data: <领星原始响应>}
-        if not wrapper.get("ok"):
-            msg = wrapper.get("msg", "未知错误")
-            code = wrapper.get("code", "")
-            raise LingxingApiError(f"查询失败 code={code}: {msg}")
+        # 接口原样透传领星响应：{code:1, data:{data:[...]}, success:true}
+        # 兼容可能的包装形态：{ok:true, data:<领星原始响应>}
+        if isinstance(data, dict) and "ok" in data:
+            if not data.get("ok"):
+                raise LingxingApiError(f"查询失败: {data.get('message') or data.get('msg') or '未知错误'}")
+            data = data.get("data") or {}
 
-        # 内层领星原始响应: {code:1, data:{data:[{...}]}, success:true}
-        inner = wrapper.get("data") or {}
-        if isinstance(inner, dict) and inner.get("success") is False:
-            msg = inner.get("msg", "未知错误")
-            raise LingxingApiError(f"领星返回失败: {msg}")
+        if isinstance(data, dict) and data.get("success") is False:
+            raise LingxingApiError(f"领星返回失败: {data.get('msg') or '未知错误'}")
+
+        inner = (data or {}).get("data") or {}
+        items = inner.get("data") or []
 
         result: dict[str, LingxingOrder] = {}
-        inner_data = (inner.get("data") if isinstance(inner, dict) else None) or {}
-        items = inner_data.get("data") or []
         for item in items:
             oid = (item.get("amazonOrderId") or "").strip()
             if not oid:
@@ -229,3 +218,25 @@ class LingxingApiClient:
                 raw=item,
             )
         return result
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _explain_http_error(exc: requests.RequestException) -> str:
+        """把 HTTP 错误码翻译成用户可读的说明。"""
+        resp = getattr(exc, "response", None)
+        if resp is None:
+            return f"网络请求失败: {exc}"
+        code = resp.status_code
+        detail = ""
+        try:
+            body = resp.json()
+            detail = body.get("message") or body.get("msg") or ""
+        except ValueError:
+            detail = (resp.text or "")[:150]
+        mapping = {
+            400: "服务端尚未配置领星凭证，请在 amzvideohelper 官网填写并保存",
+            401: "API Key 缺失或无效，请检查 Authorization 请求头",
+            502: "领星网关返回异常（如 auth-token 已过期），需在官网更新凭证",
+        }
+        reason = mapping.get(code, f"HTTP {code}")
+        return f"{reason}" + (f"（{detail}）" if detail else "")

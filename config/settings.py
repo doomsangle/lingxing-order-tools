@@ -88,6 +88,8 @@ class AppSettings:
     lingxing_batch_size: int = 100
     lingxing_test_url: str = "https://amzvideohelper.top/api/erp/lingxing/test"
     lingxing_order_url: str = "https://amzvideohelper.top/api/erp/lingxing/order/list"
+    # amzvideohelper 平台 API Key（Bearer 认证），服务端统一持有领星凭证，过期无需客户端更新
+    lingxing_api_key: str = "avk_ecc3094da949cbc71bef8ca502d48068"
 
     # ========== 模式 2：浏览器自动化 ==========
     cdp_port: int = 9222
@@ -134,6 +136,9 @@ class AppSettings:
                 old_test = raw.get("lingxing_test_url", "")
                 if old_test and ("amzrover" in old_test or "amzvideohelper" not in old_test):
                     s.lingxing_test_url = cls.lingxing_test_url
+                # 旧配置没有 API Key 或为空 → 回填内置 Key
+                if not s.lingxing_api_key:
+                    s.lingxing_api_key = cls.lingxing_api_key
                 return s
             except (json.JSONDecodeError, TypeError):
                 backup = CONFIG_PATH.with_suffix(".json.bak")

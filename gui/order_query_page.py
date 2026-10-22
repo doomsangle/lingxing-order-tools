@@ -236,8 +236,8 @@ class OrderQueryPage(QWidget):
                 self._thread = None
 
         settings: AppSettings = get_settings()
-        if not settings.lingxing_auth_token:
-            QMessageBox.warning(self, "提示", "未配置领星 Token，请到【配置】页填写。")
+        if not settings.lingxing_api_key:
+            QMessageBox.warning(self, "提示", "未配置 amzvideohelper API Key。")
             return
 
         ids = _split_order_ids(self.ids_edit.toPlainText())[:MAX_QUERY]
