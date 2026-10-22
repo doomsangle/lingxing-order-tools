@@ -77,14 +77,7 @@ class AppSettings:
     # ---- 模式 ----
     mode: str = "api"                     # "api" | "browser"
 
-    # ========== 模式 1：直接 API ==========
-    lingxing_api_url: str = "https://gw.lingxingerp.com/amz-order/api/order/OrderList"
-    lingxing_auth_token: str = ""          # auth-token（会过期，需手动更新）
-    lingxing_company_id: str = ""          # X-AK-Company-Id
-    lingxing_env_key: str = "SAAS-12"      # X-AK-ENV-KEY
-    lingxing_uid: str = ""                 # X-AK-Uid
-    lingxing_zid: str = ""                 # X-AK-Zid
-    lingxing_version: str = "3.9.3.3.0.040"
+    # ========== 模式 1：直接 API（amzvideohelper 包装接口） ==========
     lingxing_batch_size: int = 100
     lingxing_test_url: str = "https://amzvideohelper.top/api/erp/lingxing/test"
     lingxing_order_url: str = "https://amzvideohelper.top/api/erp/lingxing/order/list"

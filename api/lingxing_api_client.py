@@ -33,58 +33,6 @@ class LingxingOrder:
     raw: dict | None = None
 
 
-# ----------------------------------------------------------------------
-def parse_lingxing_headers(text: str) -> dict:
-    """
-    解析从浏览器 DevTools 复制的原始 Request Headers 文本。
-
-    支持：
-    - 请求行（POST /path HTTP/1.1）→ 与 Host 拼出完整 API URL
-    - 任意空行分隔
-    - 值里的反引号自动去除
-    - 大小写不敏感
-
-    :raises ValueError: 未找到 auth-token
-    :returns: {api_url, auth_token, company_id, uid, zid, env_key, version}
-    """
-    headers: dict[str, str] = {}
-    request_line = ""
-    methods = ("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD")
-
-    for raw in text.splitlines():
-        line = raw.strip().replace("`", "")
-        if not line:
-            continue
-        upper = line.upper()
-        first = upper.split(" ", 1)[0]
-        if first in methods and " HTTP/" in upper:
-            request_line = line
-            continue
-        if ":" in line:
-            k, _, v = line.partition(":")
-            headers[k.strip().lower()] = v.strip()
-
-    auth = headers.get("auth-token", "")
-    if not auth:
-        raise ValueError("未找到 auth-token，请确认粘贴的是 OrderList 请求的 Request Headers。")
-
-    api_url = ""
-    if request_line and "host" in headers:
-        parts = request_line.split()
-        if len(parts) >= 2:
-            api_url = f"https://{headers['host']}{parts[1]}"
-
-    return {
-        "api_url": api_url,
-        "auth_token": auth,
-        "company_id": headers.get("x-ak-company-id", ""),
-        "uid": headers.get("x-ak-uid", ""),
-        "zid": headers.get("x-ak-zid", ""),
-        "env_key": headers.get("x-ak-env-key", ""),
-        "version": headers.get("x-ak-version", ""),
-    }
-
-
 class LingxingApiClient:
     """领星 ERP 订单查询客户端，支持批量查询。"""
 
