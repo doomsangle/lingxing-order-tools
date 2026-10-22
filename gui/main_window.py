@@ -44,6 +44,7 @@ from config.settings import AppSettings, get_settings, reload_settings
 from datasource.excel_reader import read_excel_orders, ExcelOrderRow
 from gui.order_query_page import OrderQueryPage
 from gui.worker import OrderProcessWorker, WorkerResult, start_worker
+from version import __version__
 
 
 PRE_RUN_WARNING_API = (
@@ -481,7 +482,7 @@ class BatchMatchPage(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("领星 ERP 订单批量查询工具")
+        self.setWindowTitle(f"领星 ERP 订单批量查询工具 v{__version__}")
         self.resize(1000, 660)
 
         central = QWidget()
