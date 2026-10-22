@@ -86,6 +86,7 @@ class AppSettings:
     lingxing_zid: str = ""                 # X-AK-Zid
     lingxing_version: str = "3.9.3.3.0.040"
     lingxing_batch_size: int = 100
+    lingxing_test_url: str = "http://amzrover.cn/admin/erp/lingxing/test"
 
     # ========== 模式 2：浏览器自动化 ==========
     cdp_port: int = 9222

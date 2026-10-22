@@ -139,17 +139,14 @@ class LingxingApiClient:
     # ------------------------------------------------------------------
     def test_connection(self) -> str:
         """
-        测试 API 连通性：查一个不存在的订单号，只要返回 success=true 即 Token 有效。
+        测试领星 ERP 连通性（调用 amzrover 包装接口）。
         :returns: 成功消息
         :raises LingxingApiError: 失败原因
         """
-        headers = self._build_headers()
-        body = self._build_body(["000-0000000-0000000"])
+        url = self.settings.lingxing_test_url or "http://amzrover.cn/admin/erp/lingxing/test"
         try:
             resp = requests.post(
-                self.settings.lingxing_api_url,
-                json=body,
-                headers=headers,
+                url,
                 timeout=self.settings.request_timeout_sec,
             )
             resp.raise_for_status()
@@ -159,10 +156,11 @@ class LingxingApiClient:
         except ValueError as exc:
             raise LingxingApiError(f"返回非 JSON: {exc}") from exc
 
-        if data.get("success"):
-            return "连接成功！Token 有效 ✓"
+        if data.get("ok"):
+            return f"连接成功 ✓  msg={data.get('msg', '')}"
         msg = data.get("msg", "未知错误")
-        raise LingxingApiError(f"连接失败: {msg}")
+        code = data.get("code", "")
+        raise LingxingApiError(f"连接失败 code={code}: {msg}")
 
     # ------------------------------------------------------------------
     def query_orders(

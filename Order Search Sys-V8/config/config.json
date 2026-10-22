@@ -1,0 +1,22 @@
+{
+  "mode": "api",
+  "lingxing_api_url": "https://gw.lingxingerp.com/amz-order/api/order/OrderList",
+  "lingxing_auth_token": "8be3X3zGkjUA2NJoCezryj+8xCYRLlimkmTAUMeqDf0kuOaAUVzyI+d4HiMwJWqM5fKX9J8zQ+ft0zNTOTZGX4a7UIomwBdwaC94FQpCNZrzijQu5BanjvLHgkbqT1AMC/ehVV6fBqwBG9MZBuON9v8GsPUylrPN",
+  "lingxing_company_id": "90136227748491776",
+  "lingxing_env_key": "SAAS-12",
+  "lingxing_uid": "10544371",
+  "lingxing_zid": "116066",
+  "lingxing_version": "3.9.3.3.0.235",
+  "lingxing_batch_size": 100,
+  "cdp_port": 9222,
+  "chrome_executable": "",
+  "chrome_user_data_dir": "C:\\Users\\Administrator\\AppData\\Roaming\\LingxingOrderTool\\chrome_profile",
+  "lingxing_order_url": "https://erp.lingxing.com/erp/orderList",
+  "api_base_url": "",
+  "api_token": "",
+  "api_update_path": "/orders/status",
+  "request_timeout_sec": 15.0,
+  "batch_delay_sec": 0.5,
+  "last_excel_path": "D:/amz_order_auto_process/麦园-10月订单检查.xlsx",
+  "output_excel_path": ""
+}
