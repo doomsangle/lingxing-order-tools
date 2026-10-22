@@ -29,3 +29,6 @@ config/chrome_profile/
 _smoke_test.py
 Thumbs.db
 .DS_Store
+
+# 用户分发目录（含 exe 与携带凭证的运行时配置文件）
+Order Search Sys-*/
