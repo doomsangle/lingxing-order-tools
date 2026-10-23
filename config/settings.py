@@ -82,7 +82,7 @@ class AppSettings:
     lingxing_test_url: str = "https://amzvideohelper.top/api/erp/lingxing/test"
     lingxing_order_url: str = "https://amzvideohelper.top/api/erp/lingxing/order/list"
     # amzvideohelper 平台 API Key（Bearer 认证），服务端统一持有领星凭证，过期无需客户端更新
-    lingxing_api_key: str = "avk_ecc3094da949cbc71bef8ca502d48068"
+    lingxing_api_key: str = "avk_a2e8a08d224513d12aa729a016865364"
 
     # ========== 模式 2：浏览器自动化 ==========
     cdp_port: int = 9222

@@ -58,7 +58,7 @@ def clean_config() -> dict:
         "lingxing_batch_size": 100,
         "lingxing_test_url": "https://amzvideohelper.top/api/erp/lingxing/test",
         "lingxing_order_url": "https://amzvideohelper.top/api/erp/lingxing/order/list",
-        "lingxing_api_key": "avk_ecc3094da949cbc71bef8ca502d48068",
+        "lingxing_api_key": "avk_a2e8a08d224513d12aa729a016865364",
         "cdp_port": 9222,
         "chrome_executable": "",
         "chrome_user_data_dir": "",
