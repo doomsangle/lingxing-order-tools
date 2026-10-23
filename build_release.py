@@ -73,7 +73,25 @@ def clean_config() -> dict:
     }
 
 
+def syntax_check() -> None:
+    """打包前语法预检：任何 .py 语法错误直接中止发版，避免产出坏 exe。"""
+    import py_compile
+
+    print("[0/4] 语法预检 ...")
+    for f in ROOT.rglob("*.py"):
+        rel = f.relative_to(ROOT)
+        if any(part in ("build", "dist", "venv", "__pycache__") for part in rel.parts):
+            continue
+        if rel.parts and rel.parts[0].startswith("Order Search Sys-"):
+            continue
+        try:
+            py_compile.compile(str(f), doraise=True)
+        except py_compile.PyCompileError as exc:
+            raise SystemExit(f"语法错误，发版中止：\n{exc}")
+
+
 def build_exe() -> None:
+    syntax_check()
     print("[1/4] PyInstaller 打包中 ...")
     subprocess.run(
         [sys.executable, "-m", "PyInstaller", str(SPEC_FILE), "--clean", "--noconfirm"],
